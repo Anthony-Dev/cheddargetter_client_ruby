@@ -380,7 +380,19 @@ module CheddarGetter
     # etc
     def add_one_time_invoice(id_hash = {}, data = {})
       do_request(:item => :invoices, :action => 'new', :id_hash => id_hash, :data => data)
-    end    
+    end  
+
+    # https://cheddargetter.com/developers#waive-invoice
+    # 
+    # id_hash: 
+    #
+    #{
+    #  :code => Either code or id are required (this is the customer code)
+    #  :number => The invoice number to be waived is required.
+    #}
+    def waive_invoice(id_hash = {}, data = {})
+      do_request(:item => :invoices, :action => "waive", :id_hash => id_hash, :data => data)
+    end      
 
     #http://support.cheddargetter.com/faqs/marketing-metrics/marketing-metrics
     #
@@ -529,22 +541,34 @@ module CheddarGetter
         raise CheddarGetter::ClientException.new("Either a :#{code} or :#{id} is required")
       end
     end
+
+    def get_product_code_string
+      if product_code
+        "/productCode/#{CGI.escape(product_code.to_s)}"
+      elsif product_id
+        "/productId/#{CGI.escape(product_id.to_s)}"
+      else
+        raise CheddarGetter::ClientException.new("A product code or id is required to make requests.")
+      end
+    end
     
     def do_request(options)
       data = options[:data]
       deep_fix_request_data!(data)
-      
+
       path = "/xml/#{options[:item]}/#{options[:action]}"
-      path += get_identifier_string(nil, options[:id_hash]) if options[:id_hash]
-      path += get_identifier_string("item", options[:id_hash]) if options[:add_item_id]
-      path += if product_code
-                "/productCode/#{CGI.escape(product_code.to_s)}"
-              elsif product_id
-                "/productId/#{CGI.escape(product_id.to_s)}"
-              else
-                raise CheddarGetter::ClientException.new("A product code or id is required to make requests.")
-              end
-      
+      if options[:item] == :invoices && options[:action] == "waive"
+        if options[:id_hash].try(:[],:number)
+          path += get_product_code_string 
+          path += "/number/#{CGI.escape(options[:id_hash][:number].to_s)}"
+        else
+          raise CheddarGetter::ClientException.new("The invoice number is required")
+        end
+      else
+        path += get_identifier_string(nil, options[:id_hash]) if options[:id_hash]
+        path += get_identifier_string("item", options[:id_hash]) if options[:add_item_id]
+        path += get_product_code_string
+      end
       response = if data
                    CheddarGetter::Client.post(path, :body => data, :basic_auth => { 
                                                 :username => self.username, 

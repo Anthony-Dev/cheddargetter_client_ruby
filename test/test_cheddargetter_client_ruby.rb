@@ -1227,4 +1227,30 @@ class TestCheddargetterClientRuby < Test::Unit::TestCase
     assert_equal -2, charge[:eachAmount]
     assert_equal "Whoops", charge[:description]
   end
+
+  should "waive invoice" do 
+    result = CG.delete_all_customers
+    assert_equal true, result.valid?
+    
+    assert_raises(CheddarGetter::ClientException){ CG.add_charge }
+    
+    result = customer = CG.new_customer(paid_new_user_hash(1))
+    assert_equal true, result.valid?
+
+    result = CG.waive_invoice(:code => 2, :number => customer.customer_invoice[:number])
+    assert_equal false, result.valid?
+    assert_equal ["Customer not found"], result.error_messages
+    
+    result = CG.waive_invoice(:id => "not_a_valid_id", :number => customer.customer_invoice[:number])
+    assert_equal false, result.valid?
+    assert_equal ["Customer not found"], result.error_messages
+
+    assert_raises(CheddarGetter::ClientException){ CG.waive_invoice(:code => 1) }
+    
+    result = CG.waive_invoice(:code => 1, :number => 123)
+    assert_equal ["Invoice not found"], result.error_messages
+
+    result = CG.waive_invoice(:code => 1, :number => customer.customer_invoice[:number])
+    assert_equal true, result.valid?
+
 end
